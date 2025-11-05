@@ -33,6 +33,18 @@ function showDetail(section) {
                 console.error('Error loading settings content:', error);
                 content.innerHTML = `<p class="text-red-500">Failed to load add product content.</p>`;
             });
+    } else if (section === 'editProduct') {
+        if (productCode === '') {
+            Swal.fire('Error', 'Product code is missing.', 'error');
+            return;
+        }
+        axios.get(`edit_product.php?code=${productCode}`)
+            .then(response => { content.innerHTML = response.data; })
+            .catch(error => {
+                Swal.fire('Error', 'Failed to load content. Please try again.', 'error');
+                console.error('Error loading edit product content:', error);
+                content.innerHTML = `<p class="text-red-500">Failed to load edit product content.</p>`;
+            });
     }
 }
 
@@ -108,7 +120,7 @@ function previewImages(event, selectedImages) {
             container.appendChild(img);
             container.appendChild(name);
             previewContainer.appendChild(container);
-            selectedImages.push(file);
+            selectedImages.add(file);
         };
         reader.readAsDataURL(file);
     });
@@ -123,6 +135,17 @@ window.addEventListener('DOMContentLoaded', init);
 
 let currentSearchTermProducts = '';
 let selectedImageProducts = [];
+let productCode = '';
+
+function getProductCode(code) {
+    if (code) {
+        productCode = code;
+    } else {
+        productCode = '';
+    }
+
+    return productCode;
+}
 
 async function addProduct() {
     const category = document.getElementById('category').value;
@@ -187,20 +210,66 @@ async function addProduct() {
     }
 }
 
-function editProduct(productCode) {
-    Swal.fire({
-        title: 'Edit Product',
-        html: `<input type="text" id="productCode" class="swal2-input" value="${productCode}" readonly>`,
-        focusConfirm: false,
-        showCancelButton: true,
-        confirmButtonText: 'Save',
-        cancelButtonText: 'Cancel',
-        preConfirm: () => {
-            const productCode = document.getElementById('productCode').value;
-            console.log('Product edited:', productCode);
-            Swal.fire('Saved!', '', 'success');
+async function editProduct(productCode) {
+    const category = document.getElementById('category').value;
+    const name = document.getElementById('name').value;
+    const description = document.getElementById('description').value;
+    const price = document.getElementById('price').value;
+    const images = selectedImageProducts;
+
+    if (!category || !name || !price || images.length === 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Oops...',
+            text: 'Please fill in all required fields!',
+        });
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('category', category);
+    formData.append('code', productCode);
+    formData.append('name', name);
+    formData.append('description', description);
+    formData.append('price', price);
+
+    for (let i = 0; i < images.length; i++) {
+        formData.append('image[]', images[i]);
+    }
+
+    try {
+        const response = await fetch('admin_update_product.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || result.error) {
+            throw new Error(result.error || 'Failed to update product');
         }
-    });
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Success',
+            text: 'Product updated successfully!',
+        }).then(() => {
+            document.getElementById('category').value = '';
+            document.getElementById('code').value = '';
+            document.getElementById('name').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('price').value = '';
+            document.getElementById('image').value = '';
+            document.getElementById('preview-list').innerHTML = '';
+            selectedImageProducts = [];
+        });
+    } catch (error) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Failed to update product: ' + error.message,
+        });
+    }
 }
 
 function deleteProduct(productCode) {
@@ -257,7 +326,7 @@ function fetchAndRenderProducts(page = 1) {
                         <td class="border border-gray-300 px-4 py-2 text-left text-base whitespace-nowrap">${product.category_name}</td>
                         <td class="border border-gray-300 px-4 py-2 text-left text-base">${imageTags}</td>
                         <td class="border border-gray-300 px-4 py-2 text-left text-base whitespace-nowrap">
-                            <button onclick="editProduct('${product.code}')" class="bg-blue-500 text-white px-2 py-1 rounded">Edit</button> 
+                            <button onclick="getProductCode('${product.code}'); showDetail('editProduct');" class="bg-blue-500 text-white px-2 py-1 rounded">Edit</button>
                             <button onclick="deleteProduct('${product.code}')" class="bg-red-500 text-white px-2 py-1 rounded">Delete</button>
                         </td>
                     </tr>
